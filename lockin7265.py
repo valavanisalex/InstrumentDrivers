@@ -71,6 +71,25 @@ class ACGainModes(Enum):
     mode_8 = (8, 80)
     mode_9 = (9, 90)
 
+class LineFilterModes(Enum):
+    '''The set of notch line-filter modes'''
+    off              = 0
+    enable_50_60Hz   = 1
+    enable_100_120Hz = 2
+    enable_both      = 3
+
+class LineFilterFrequencies(Enum):
+    '''The set of line-filter frequencies'''
+    freq_60_120Hz = 0
+    freq_50_100Hz = 1
+
+#### ENUMERATIONS FOR REFERENCE CHANNEL ####
+class ReferenceChannelSources(Enum):
+    '''The set of reference channel sources'''
+    internal  = 0
+    ext_logic = 1 # Rear panel TTL
+    ext       = 2 # Front panel analog input
+
 # Driver for a Signal Recovery 7265 Lock-in amplifier
 class LockIn7265(object):
     def __init__(self, rm):
@@ -109,6 +128,16 @@ class LockIn7265(object):
     def get_magnitude(self):
         '''Get the magnitude of the signal in V'''
         return self.inst.query_ascii_values("MAG.")[0]
+
+    def get_X(self):
+        '''Get the X-component of the signal in V'''
+        X = 0
+        try:
+            X = self.inst.query_ascii_values("X.")[0]
+        except ValueError:
+            X = 0
+
+        return X
 
     def set_sensitivity(self, SensitivityMode):
         '''Set the sensitivity mode'''
@@ -149,9 +178,44 @@ class LockIn7265(object):
         '''Enable automated setting of the AC Gain'''
         self.inst.write("AUTOMATIC " + str(int(enable)))
 
+    def get_auto_gain(self):
+        '''Get whether automatic gain control is enabled'''
+        return bool(self.inst.query_ascii_values("AUTOMATIC")[0])
+
+    def set_line_filter(self, LineFilterMode, LineFilterFrequency):
+        '''Set the line-filter parameters'''
+        self.inst.write("LF " + str(LineFilterMode.value) + " " + str(LineFilterFrequency.value))
+
+    def get_line_filter(self):
+        '''Get the line-filter parameters'''
+        settings     = self.inst.query_ascii_values("LF")
+        modekey      = LineFilterModes(settings[0])
+        frequencykey = LineFilterFrequencies(settings[1])
+        return modekey, frequencykey
+
     def get_time_constant(self):
         '''Get the integration time-constant in s'''
         return self.inst.query_ascii_values("TC.")[0]
+
+    ##### REFERENCE CHANNEL COMMANDS ####
+    def set_reference_channel_source(self, source):
+        '''Sets the reference channel source'''
+        self.inst.write("IE " + str(source.value))
+
+    ##### INTERNAL OSCILLATOR COMMANDS #####
+    def set_oscillator_amplitude(self, V):
+        '''Set the oscillator amplitude in volts'''
+        if (V > 5 or V < 0):
+            raise ValueError("Cannot set oscillator to >5 V amplitude")
+        else:
+            self.inst.write("OA. " + str(V))
+
+    def set_oscillator_frequency(self, f):
+        '''Set the oscillator frequency in Hz'''
+        if (f > 250e3 or f < 0):
+            raise ValueError("Cannot set oscillator to >250 kHz frequency")
+        else:
+            self.inst.write("OF. " + str(f))
 
     def close(self):
         print("Closing Lock-in amplifier")
